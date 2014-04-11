@@ -23,20 +23,20 @@ class PDFTransformer(object):
     def __new__(cls, *args, **kwargs):
         _instance = super(PDFTransformer, cls).__new__(cls)
         _instance.random_part = PDFTransformer.id_generator()
-        work_directory = kwargs['work_directory']
-        _instance.to_search = os.path.join(work_directory,
+        directory = kwargs['directory']
+        _instance.to_search = os.path.join(directory,
                                            _instance.random_part)
         filename = os.path.join(
-            work_directory, _instance.random_part + ".png")
+            directory, _instance.random_part + ".png")
 
         with Image(filename=kwargs['pdf']) as img:
             img.save(filename=filename)
 
         _instance.generated_files = []
-        for file in os.listdir(work_directory):
+        for file in os.listdir(directory):
             if file.startswith(_instance.random_part):
                 _instance.generated_files.append(
-                    os.path.join(work_directory, file))
+                    os.path.join(directory, file))
 
         _instance.generated_files.sort()
         return _instance
@@ -53,16 +53,16 @@ class ExtendedImage(object):
     """
     Extended PIL.Image delegate unimplemented method to the PIL.Image
     The purpose class is to verify if other img is not equal with self._img
-    If are differs generate a new picture and marks the pixels differs.
+    If differs generate a new picture and marks the different pixels.
     """
     MARK_PIXEL = (255, 0, 0, 255)
 
-    def __init__(self, img, work_directory):
+    def __init__(self, img, directory):
         """
         left = ExtendedImage(Image.open(file_left))
         """
         self._img = img
-        self._work_dir = work_directory
+        self._work_dir = directory
 
     def __make_new_picture(self, xy):
         new_image = self._img.copy()
@@ -98,34 +98,33 @@ class ExtendedImage(object):
         return False
 
 
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-file_left', '--file_left', help='pdf to compare',
-                        default='left.pdf')
-    parser.add_argument('-file_right', '--file_right', help='pdf marthor',
-                        default='right.pdf')
-    parser.add_argument('-w', '--work_directory', help='work directory')
+    parser.add_argument('-i', '--input',
+        help='PDF file path or URL to compare',
+        default='input.pdf')
+    parser.add_argument('-o', '--output',
+        help='PDF file path or URL to compare with',
+        default='output.pdf')
+    parser.add_argument('-d', '--directory',
+        help='Output directory')
 
     arguments = parser.parse_args()
-    file_left = arguments.file_left
-    file_right = arguments.file_right
-    work_directory = arguments.work_directory
+    left = arguments.input
+    right = arguments.output
+    directory = arguments.directory
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
-    with PDFTransformer(pdf=file_left, work_directory=work_directory) \
-        as leftPDF, \
-        PDFTransformer(pdf=file_right, work_directory=work_directory) \
-            as rightPDF:
+    with PDFTransformer(pdf=left, directory=directory) as leftPDF:
+        with PDFTransformer(pdf=right, directory=directory) as rightPDF:
+            are_diffs = False
+            for idx in range(len(leftPDF.generated_files)):
+                if (ExtendedImage(PIL_Image.open(leftPDF.generated_files[idx]),
+                                  directory) !=
+                        PIL_Image.open(rightPDF.generated_files[idx])):
+                        are_diffs = True
 
-        are_diffs = False
-        for idx in range(len(leftPDF.generated_files)):
-            if (ExtendedImage(PIL_Image.open(leftPDF.generated_files[idx]),
-                              work_directory) !=
-                    PIL_Image.open(rightPDF.generated_files[idx])):
-                    are_diffs = True
-
-        if are_diffs:
-            sys.exit(1)
-        sys.exit(0)
-
-if __name__ == "__main__":
-    main()
+            if are_diffs:
+                sys.exit(1)
+            sys.exit(0)
