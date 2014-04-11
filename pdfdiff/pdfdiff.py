@@ -97,8 +97,9 @@ class ExtendedImage(object):
 
         return False
 
-
-if __name__ == "__main__":
+def main():
+    """ Main script
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input',
         help='PDF file path or URL to compare',
@@ -128,3 +129,6 @@ if __name__ == "__main__":
             if are_diffs:
                 sys.exit(1)
             sys.exit(0)
+
+if __name__ == "__main__":
+    main()
