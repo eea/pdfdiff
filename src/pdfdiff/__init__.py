@@ -1,13 +1,16 @@
 #!/usr/bin/env python
+
+import os
+import sys
+import argparse
+import contextlib
+from urlparse import urlparse
+from urllib2 import urlopen
 from datetime import datetime
 from PIL import Image as PIL_Image
 from random import choice
 from string import ascii_uppercase, digits
 from wand.image import Image
-
-import argparse
-import os
-import sys
 
 
 class PDFTransformer(object):
@@ -97,6 +100,33 @@ class ExtendedImage(object):
 
         return False
 
+def url2file(url, directory="", timeout=60):
+    """ Get file from url and return a system path to file
+    """
+    res = urlparse(url)
+    if not res.scheme:
+        return url
+
+    filename = None
+    defaultname = res.path.replace('/', '-')
+    if directory:
+        defaultname = os.path.join(directory, defaultname)
+    with contextlib.closing(urlopen(url, timeout=timeout)) as conn:
+        headers = dict(conn.headers)
+        cdisp = headers.get("content-disposition", "")
+        filename = cdisp.replace('attachment; filename="', "")
+        filename = filename.strip('"')
+        if filename:
+            if directory:
+                filename = os.path.join(directory, filename)
+        else:
+            filename = defaultname
+
+        with open(filename, "wb") as output:
+            for data in conn:
+                output.write(data)
+    return filename if filename else defaultname
+
 def main():
     """ Main script
     """
@@ -109,13 +139,19 @@ def main():
         default='output.pdf')
     parser.add_argument('-d', '--directory',
         help='Output directory')
+    parser.add_argument('-t', '--timeout',
+        help="Timeout to be used when using with URLs",
+        default=60)
 
     arguments = parser.parse_args()
-    left = arguments.input
-    right = arguments.output
+
     directory = arguments.directory
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+    timeout = int(arguments.timeout)
+    left = url2file(arguments.input, directory, timeout)
+    right = url2file(arguments.output, directory, timeout)
 
     with PDFTransformer(pdf=left, directory=directory) as leftPDF:
         with PDFTransformer(pdf=right, directory=directory) as rightPDF:
