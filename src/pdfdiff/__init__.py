@@ -25,7 +25,12 @@ class PDFTransformer(object):
 
     def __new__(cls, *args, **kwargs):
         _instance = super(PDFTransformer, cls).__new__(cls)
-        _instance.random_part = PDFTransformer.id_generator()
+        _instance.random_part = kwargs.get('type',
+                                            PDFTransformer.id_generator())
+        _instance.random_part += '-page'
+
+        _instance.cleanup = kwargs.get('cleanup', True)
+
         directory = kwargs['directory']
         _instance.to_search = os.path.join(directory,
                                            _instance.random_part)
@@ -48,9 +53,9 @@ class PDFTransformer(object):
         return self
 
     def __exit__(self, exception_type, exception_val, trace):
-        for file in self.generated_files:
-            os.remove(file)
-
+        if self.cleanup:
+            for file in self.generated_files:
+                os.remove(file)
 
 class ExtendedImage(object):
     """
@@ -76,9 +81,12 @@ class ExtendedImage(object):
         for coordonate in xy:
             pix_new_image[coordonate[1], coordonate[0]] =\
                 ExtendedImage.MARK_PIXEL
+
+        filename = self._img.filename.split('-')[-1]
+        filename = 'diff-page-%s' % filename
         new_image.save(
-            os.path.join(self._work_dir,
-                         datetime.now().strftime("%y-%m-%d-%H:%M:%S:%f.png")))
+            os.path.join(self._work_dir, filename)
+        )
 
     def __ne__(self, other):
         xy = []
@@ -132,16 +140,32 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input',
-        help='PDF file path or URL to compare',
+        help='PDF file path or URL to compare. Default: input.pdf',
         default='input.pdf')
     parser.add_argument('-o', '--output',
-        help='PDF file path or URL to compare with',
+        help='PDF file path or URL to compare with. Default: output.pdf',
         default='output.pdf')
     parser.add_argument('-d', '--directory',
-        help='Output directory')
+        help='Output directory. No default')
     parser.add_argument('-t', '--timeout',
-        help="Timeout to be used when using with URLs",
+        help="Timeout to be used when using with URLs. Default: 60 seconds",
         default=60)
+
+    parser.add_argument('--cleanup-input', dest='cleanupInput',
+        help="(default) Auto cleanup generated input images.",
+        action='store_true',
+        default=True)
+    parser.add_argument('--no-cleanup-input', dest='cleanupInput',
+        help="Do not auto cleanup generated input images.",
+        action='store_false')
+
+    parser.add_argument('--cleanup-output', dest='cleanupOutput',
+        help="(default) Do not auto cleanup generated output images.",
+        action='store_true',
+        default=True)
+    parser.add_argument('--no-cleanup-output',  dest='cleanupOutput',
+        help="Do not auto cleanup generated output images.",
+        action='store_false')
 
     arguments = parser.parse_args()
 
@@ -152,17 +176,21 @@ def main():
     timeout = int(arguments.timeout)
     left = url2file(arguments.input, directory, timeout)
     right = url2file(arguments.output, directory, timeout)
+    cleanup_input = arguments.cleanupInput
+    cleanup_output = arguments.cleanupOutput
 
-    with PDFTransformer(pdf=left, directory=directory) as leftPDF:
-        with PDFTransformer(pdf=right, directory=directory) as rightPDF:
-            are_diffs = False
+    with PDFTransformer(pdf=left, directory=directory,
+                        type='input', cleanup=cleanup_input) as leftPDF:
+        with PDFTransformer(pdf=right, directory=directory,
+                            type='output', cleanup=cleanup_output) as rightPDF:
+            diffs = False
             for idx in range(len(leftPDF.generated_files)):
                 if (ExtendedImage(PIL_Image.open(leftPDF.generated_files[idx]),
                                   directory) !=
                         PIL_Image.open(rightPDF.generated_files[idx])):
-                        are_diffs = True
+                        diffs = True
 
-            if are_diffs:
+            if diffs:
                 sys.exit(1)
             sys.exit(0)
 
