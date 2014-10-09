@@ -71,6 +71,7 @@ class ExtendedImage(object):
         """
         self._img = img
         self._work_dir = directory
+        self._diffs = 0
 
     def __make_new_picture(self, xy):
         new_image = self._img.copy()
@@ -90,8 +91,11 @@ class ExtendedImage(object):
 
     def __ne__(self, other):
         xy = []
-        if (self._img.size[1] != other.size[1] or
-                self._img.size[0] != other.size[0]):
+        if self._img.size[1] != other.size[1]:
+            self._diffs += other.size[1]
+            return True
+        elif self._img.size[0] != other.size[0]:
+            self._diffs += other.size[1]
             return True
 
         pix_lf = self._img.load()
@@ -104,6 +108,7 @@ class ExtendedImage(object):
 
         if xy:
             self.__make_new_picture(xy)
+            self._diffs += len(xy)
             return True
 
         return False
@@ -167,6 +172,10 @@ def main():
         help="Do not auto cleanup generated output images.",
         action='store_false')
 
+    parser.add_argument('-a', '--allow',
+        help="Allow a number of differences. Default: 0",
+        default=0)
+
     arguments = parser.parse_args()
 
     directory = arguments.directory
@@ -174,6 +183,7 @@ def main():
         os.makedirs(directory)
 
     timeout = int(arguments.timeout)
+    allow = int(arguments.allow)
     left = url2file(arguments.input, directory, timeout)
     right = url2file(arguments.output, directory, timeout)
     cleanup_input = arguments.cleanupInput
@@ -183,14 +193,15 @@ def main():
                         type='input', cleanup=cleanup_input) as leftPDF:
         with PDFTransformer(pdf=right, directory=directory,
                             type='output', cleanup=cleanup_output) as rightPDF:
-            diffs = False
+            diffs = 0
             for idx in range(len(leftPDF.generated_files)):
-                if (ExtendedImage(PIL_Image.open(leftPDF.generated_files[idx]),
-                                  directory) !=
-                        PIL_Image.open(rightPDF.generated_files[idx])):
-                        diffs = True
+                leftImg = ExtendedImage(PIL_Image.open(
+                                      leftPDF.generated_files[idx]), directory)
+                rightImg = PIL_Image.open(rightPDF.generated_files[idx])
+                if (leftImg != rightImg):
+                    diffs += leftImg._diffs
 
-            if diffs:
+            if diffs > allow:
                 sys.exit(1)
             sys.exit(0)
 
