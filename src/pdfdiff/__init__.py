@@ -5,12 +5,9 @@ import os
 import sys
 import time
 import argparse
-import contextlib
 import requests
 from bs4 import BeautifulSoup
 from urlparse import urlparse
-from urllib2 import urlopen
-from datetime import datetime
 from PIL import Image as PIL_Image
 from random import choice
 from string import ascii_uppercase, digits
@@ -39,7 +36,7 @@ class PDFTransformer(object):
         _instance.to_search = os.path.join(directory,
                                            _instance.random_part)
         filename = os.path.join(
-            directory, _instance.random_part + ".png")
+            directory, _instance.random_part + "-%04d.png")
 
         with Image(filename=kwargs['pdf']) as img:
             img.save(filename=filename)
