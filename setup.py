@@ -41,5 +41,7 @@ setup(
         'argparse',
         'wand',
         'Pillow',
+        'requests',
+        'BeautifulSoup4',
     ]
 )

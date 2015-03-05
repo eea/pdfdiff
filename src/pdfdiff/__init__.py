@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
+import re
 import os
 import sys
+import time
 import argparse
 import contextlib
+import requests
+from bs4 import BeautifulSoup
 from urlparse import urlparse
 from urllib2 import urlopen
 from datetime import datetime
@@ -113,32 +117,80 @@ class ExtendedImage(object):
 
         return False
 
-def url2file(url, directory="", timeout=60):
+def url2file(url, directory="", timeout=60,
+             method='get', email='', retry=10, prefix=''):
     """ Get file from url and return a system path to file
     """
     res = urlparse(url)
     if not res.scheme:
         return url
 
-    filename = None
-    defaultname = res.path.replace('/', '-')
-    if directory:
-        defaultname = os.path.join(directory, defaultname)
-    with contextlib.closing(urlopen(url, timeout=timeout)) as conn:
-        headers = dict(conn.headers)
-        cdisp = headers.get("content-disposition", "")
-        filename = cdisp.replace('attachment; filename="', "")
-        filename = filename.strip('"')
-        if filename:
-            if directory:
-                filename = os.path.join(directory, filename)
-        else:
-            filename = defaultname
+    #
+    # Handle email form
+    #
+    content = ''
+    filename = ''
+    if method == 'post':
+        resp = requests.post(url, params={
+            'email': email,
+            'form.button.download': 'Send'
+        })
 
-        with open(filename, "wb") as output:
-            for data in conn:
-                output.write(data)
-    return filename if filename else defaultname
+        status = resp.status_code
+        if status != 200:
+            raise requests.exceptions.RequestException("%s" % status)
+
+        soup = BeautifulSoup(resp.content)
+        pdfs = soup.find_all('a', href=re.compile('^.*\/downloads\/.*\.pdf.*$'))
+
+        for pdf in pdfs:
+            url = pdf.get('href')
+            return url2file(url, directory, timeout,
+                            method='get', email=email, prefix=prefix)
+
+        raise requests.exceptions.RequestException(
+            "Couldn't find downloading PDF link at url: %s" % url)
+
+    elif method == 'get':
+        resp = requests.get(url)
+        status = resp.status_code
+        if status == 404:
+            retry -= 1
+            if retry <= 0:
+                raise requests.exceptions.RequestException(
+                    "%s, %s" % (status, url))
+
+            sleep = 2*retry
+            print (
+                "PDF not ready at url: %s. "
+                 "Sleeping for %s seconds. Retry %s" % (url, sleep, retry)
+            )
+            time.sleep(sleep)
+
+            return url2file(url, directory, timeout, 'get',
+                            email=email, retry=retry, prefix=prefix)
+
+        if status != 200:
+            raise requests.exceptions.RequestException(
+                    "%s, %s" % (status, url))
+
+        if 'pdf' not in  resp.headers.get('content-type'):
+            soup = BeautifulSoup(resp.content)
+            form = soup.find_all('input', id='email')
+            if form:
+                return url2file(url, directory, timeout,
+                                method='post', email=email, prefix=prefix)
+        else:
+            filename = url.split('?')[0].split('/')[-1]
+            content = resp.content
+
+    if prefix:
+        filename = '%s%s' % (prefix,  filename)
+
+    filename = os.path.join(directory, filename)
+    with open(filename, "wb") as output:
+        output.write(content)
+    return filename
 
 def main():
     """ Main script
@@ -156,6 +208,18 @@ def main():
         help="Timeout to be used when using with URLs. Default: 60 seconds",
         default=60)
 
+    parser.add_argument('-a', '--allow',
+        help="Allow a number of differences. Default: 0",
+        default=0)
+
+    parser.add_argument('-r', '--retries',
+        help="Number of retries for non-generated yet PDFs. Default: 10",
+        default=10)
+
+    parser.add_argument('-e', '--email',
+        help="Send PDF link to this email Default: eea-github@googlegroups.com",
+        default="eea-github@googlegroups.com")
+
     parser.add_argument('--cleanup-input', dest='cleanupInput',
         help="(default) Auto cleanup generated input images.",
         action='store_true',
@@ -172,9 +236,6 @@ def main():
         help="Do not auto cleanup generated output images.",
         action='store_false')
 
-    parser.add_argument('-a', '--allow',
-        help="Allow a number of differences. Default: 0",
-        default=0)
 
     arguments = parser.parse_args()
 
@@ -184,11 +245,15 @@ def main():
 
     timeout = int(arguments.timeout)
     allow = int(arguments.allow)
-    left = url2file(arguments.input, directory, timeout)
-    right = url2file(arguments.output, directory, timeout)
+    retries = int(arguments.retries)
+    email = arguments.email
+    left = url2file(arguments.input, directory, timeout,
+                    email=email, retry=retries, prefix='input-')
+    right = url2file(arguments.output, directory, timeout,
+                     email=email, retry=retries, prefix='output-')
+
     cleanup_input = arguments.cleanupInput
     cleanup_output = arguments.cleanupOutput
-
     with PDFTransformer(pdf=left, directory=directory,
                         type='input', cleanup=cleanup_input) as leftPDF:
         with PDFTransformer(pdf=right, directory=directory,
