@@ -6,13 +6,14 @@ import sys
 import time
 import argparse
 import requests
+import tempfile
+from subprocess import Popen
 from bs4 import BeautifulSoup
 from urlparse import urlparse
 from PIL import Image as PIL_Image
 from random import choice
 from string import ascii_uppercase, digits
 from wand.image import Image
-
 
 class PDFTransformer(object):
     """
@@ -138,7 +139,12 @@ def url2file(url, directory="", timeout=60,
             raise requests.exceptions.RequestException("%s" % status)
 
         soup = BeautifulSoup(resp.content)
-        pdfs = soup.find_all('a', href=re.compile('^.*\/downloads\/.*\.pdf.*$'))
+        pdfs = soup.find_all(
+            'a', href=re.compile('^.*\/downloads\/.*\.pdf.*$'))
+
+        if not pdfs:
+            pdfs = soup.find_all(
+                'a', href=re.compile('^.*\/downloads\/.*\.epub.*$'))
 
         for pdf in pdfs:
             url = pdf.get('href')
@@ -171,7 +177,7 @@ def url2file(url, directory="", timeout=60,
             raise requests.exceptions.RequestException(
                     "%s, %s" % (status, url))
 
-        if 'pdf' not in  resp.headers.get('content-type'):
+        if 'html' in  resp.headers.get('content-type'):
             soup = BeautifulSoup(resp.content)
             form = soup.find_all('input', id='email')
             if form:
@@ -187,6 +193,21 @@ def url2file(url, directory="", timeout=60,
     filename = os.path.join(directory, filename)
     with open(filename, "wb") as output:
         output.write(content)
+
+    # Handle epub
+    if filename.endswith('.epub'):
+        pdfname = filename + '.pdf'
+        process = Popen(
+            ['ebook-convert', filename, pdfname],
+            stdin=tempfile.TemporaryFile(),
+            stdout=tempfile.TemporaryFile(),
+            stderr=tempfile.TemporaryFile()
+        )
+
+
+        process.communicate()
+        filename = pdfname
+
     return filename
 
 def main():
