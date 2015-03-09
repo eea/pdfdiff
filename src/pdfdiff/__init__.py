@@ -6,8 +6,7 @@ import sys
 import time
 import argparse
 import requests
-import tempfile
-from subprocess import Popen
+from subprocess import check_call
 from bs4 import BeautifulSoup
 from urlparse import urlparse
 from PIL import Image as PIL_Image
@@ -197,15 +196,7 @@ def url2file(url, directory="", timeout=60,
     # Handle epub
     if filename.endswith('.epub'):
         pdfname = filename + '.pdf'
-        process = Popen(
-            ['xvfb-run', 'ebook-convert', filename, pdfname],
-            stdin=tempfile.TemporaryFile(),
-            stdout=tempfile.TemporaryFile(),
-            stderr=tempfile.TemporaryFile()
-        )
-
-
-        process.communicate()
+        check_call(['xvfb-run', 'ebook-convert', filename, pdfname])
         filename = pdfname
 
     return filename
