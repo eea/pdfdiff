@@ -284,6 +284,7 @@ def main():
                 if (leftImg != rightImg):
                     diffs += leftImg._diffs
 
+            print "Number of differences: %s" % diffs
             if diffs > allow:
                 sys.exit(1)
             sys.exit(0)
