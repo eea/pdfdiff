@@ -198,7 +198,7 @@ def url2file(url, directory="", timeout=60,
     if filename.endswith('.epub'):
         pdfname = filename + '.pdf'
         process = Popen(
-            ['ebook-convert', filename, pdfname],
+            ['xvfb-run', 'ebook-convert', filename, pdfname],
             stdin=tempfile.TemporaryFile(),
             stdout=tempfile.TemporaryFile(),
             stderr=tempfile.TemporaryFile()
