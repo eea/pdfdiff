@@ -196,7 +196,9 @@ def url2file(url, directory="", timeout=60,
     # Handle epub
     if filename.endswith('.epub'):
         pdfname = filename + '.pdf'
-        check_call(['xvfb-run', '-a', 'ebook-convert', filename, pdfname])
+        check_call([
+            'xvfb-run', '-a', 'ebook-convert',  filename, pdfname,
+            '--filter-css', 'font-family'])
         filename = pdfname
 
     return filename
