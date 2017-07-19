@@ -137,7 +137,7 @@ def url2file(url, directory="", timeout=60,
         if status != 200:
             raise requests.exceptions.RequestException("%s" % status)
 
-        soup = BeautifulSoup(resp.content)
+        soup = BeautifulSoup(resp.content, "html.parser")
         pdfs = soup.find_all(
             'a', href=re.compile('^.*\/downloads\/.*\.pdf.*$'))
 
@@ -177,7 +177,7 @@ def url2file(url, directory="", timeout=60,
                     "%s, %s" % (status, url))
 
         if 'html' in  resp.headers.get('content-type'):
-            soup = BeautifulSoup(resp.content)
+            soup = BeautifulSoup(resp.content, "html.parser")
             form = soup.find_all('input', id='email')
             if form:
                 return url2file(url, directory, timeout,
